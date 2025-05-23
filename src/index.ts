@@ -3,9 +3,11 @@ import dotenv from "dotenv";
 import { handleMessage } from "./services/openaiService";
 import { ensureUser } from "./services/userService";
 import { clearHistory } from "./services/historyService";
-import { prisma } from "./db/client";
+import { exec } from "child_process";
+import { promisify } from "util";
 
 dotenv.config();
+const execAsync = promisify(exec);
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 
@@ -32,7 +34,21 @@ bot.on("text", async (ctx) => {
 	await ctx.reply(reply);
 });
 
-bot.launch().then(() => console.log("🤖 Бот запущен"));
+async function main() {
+	try {
+		console.log("📦 Applying migrations...");
+		await execAsync("npx prisma migrate deploy");
+		console.log("✅ Migrations applied");
 
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+		await bot.launch();
+		console.log("🤖 Бот запущен");
+
+		process.once("SIGINT", () => bot.stop("SIGINT"));
+		process.once("SIGTERM", () => bot.stop("SIGTERM"));
+	} catch (err) {
+		console.error("❌ Ошибка при запуске:", err);
+		process.exit(1);
+	}
+}
+
+main();
